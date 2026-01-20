@@ -4,6 +4,10 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
 
+# OCR imports
+from pdf2image import convert_from_bytes
+import pytesseract
+
 # ---------------- LOAD EMBEDDING MODEL ----------------
 @st.cache_resource
 def load_model():
@@ -16,22 +20,109 @@ def extract_canonical_skills(text):
     text = text.lower()
     skills = set()
 
-    if any(k in text for k in ["seo", "digital marketing", "marketing"]):
+    # 🔹 Digital Marketing
+    if any(k in text for k in [
+        "seo", "sem", "digital marketing", "content marketing",
+        "google ads", "facebook ads", "social media marketing"
+    ]):
         skills.add("digital marketing")
 
+    # 🔹 Software Development
     if any(k in text for k in [
-        "software", "engineering", "developer",
-        "java", "javascript", "html", "css", "sql"
+        "software", "developer", "engineering",
+        "java", "python", "c++", "javascript",
+        "html", "css", "sql", "spring", "django", "flask"
     ]):
         skills.add("software development")
 
-    if any(k in text for k in ["ui", "ux", "design"]):
+    # 🔹 Web Development
+    if any(k in text for k in [
+        "web developer", "frontend", "backend", "full stack",
+        "react", "angular", "vue", "node", "express"
+    ]):
+        skills.add("web development")
+
+    # 🔹 UI / UX Design
+    if any(k in text for k in [
+        "ui", "ux", "user interface", "user experience",
+        "figma", "adobe xd", "wireframe", "prototype"
+    ]):
         skills.add("ui ux design")
 
-    if any(k in text for k in ["ai", "ml", "cnn", "deep learning"]):
+    # 🔹 Machine Learning / AI
+    if any(k in text for k in [
+        "ai", "ml", "machine learning", "deep learning",
+        "cnn", "rnn", "nlp", "computer vision"
+    ]):
         skills.add("machine learning")
 
+    # 🔹 Data Science / Data Analytics
+    if any(k in text for k in [
+        "data scientist", "data science", "data analyst",
+        "pandas", "numpy", "matplotlib", "statistics",
+        "power bi", "tableau", "excel"
+    ]):
+        skills.add("data science")
+
+    # 🔹 Cloud & DevOps
+    if any(k in text for k in [
+        "aws", "azure", "gcp", "cloud computing",
+        "devops", "docker", "kubernetes", "ci/cd"
+    ]):
+        skills.add("cloud devops")
+
+    # 🔹 Cybersecurity
+    if any(k in text for k in [
+        "cyber security", "cybersecurity", "ethical hacking",
+        "penetration testing", "network security", "soc"
+    ]):
+        skills.add("cybersecurity")
+
+    # 🔹 Mobile App Development
+    if any(k in text for k in [
+        "android", "ios", "mobile app", "flutter",
+        "react native", "kotlin", "swift"
+    ]):
+        skills.add("mobile app development")
+
+    # 🔹 Testing / QA
+    if any(k in text for k in [
+        "software testing", "qa", "quality assurance",
+        "manual testing", "automation testing",
+        "selenium", "junit"
+    ]):
+        skills.add("software testing")
+
+    # 🔹 Business / Management
+    if any(k in text for k in [
+        "business analyst", "project manager",
+        "product manager", "agile", "scrum"
+    ]):
+        skills.add("business management")
+
+    # 🔹 Finance / Accounting
+    if any(k in text for k in [
+        "finance", "accounting", "tally", "gst",
+        "auditing", "financial analysis"
+    ]):
+        skills.add("finance accounting")
+
+    # 🔹 HR / Recruitment
+    if any(k in text for k in [
+        "human resources", "hr", "recruitment",
+        "talent acquisition", "payroll"
+    ]):
+        skills.add("human resources")
+
     return skills
+
+# ---------------- OCR FUNCTION ----------------
+def extract_text_with_ocr(pdf_file):
+    images = convert_from_bytes(pdf_file.read())
+    text = ""
+    for img in images:
+        text += pytesseract.image_to_string(img) + " "
+    return clean_text(text)
 
 # ---------------- PDF + TEXT UTILS ----------------
 def extract_text_from_pdf(pdf_file):
@@ -46,7 +137,7 @@ def extract_text_from_pdf(pdf_file):
     except:
         pass
 
-    # 2️⃣ Fallback to pdfplumber if PyPDF fails
+    # 2️⃣ Fallback to pdfplumber
     if not text.strip():
         try:
             import pdfplumber
@@ -57,9 +148,15 @@ def extract_text_from_pdf(pdf_file):
         except:
             pass
 
-    # 3️⃣ Final cleanup
-    return clean_text(text)
+    # 3️⃣ OCR fallback for scanned PDFs
+    if len(text.strip()) < 100:
+        try:
+            pdf_file.seek(0)
+            text = extract_text_with_ocr(pdf_file)
+        except:
+            pass
 
+    return clean_text(text)
 
 def clean_text(text):
     return re.sub(r"\s+", " ", text).strip()
@@ -81,9 +178,9 @@ def keyword_match_score(resume_skills, jd_skills):
 
 # ---------------- FEEDBACK ----------------
 def generate_ai_feedback(final_score, resume_skills, jd_skills):
-    matched = resume_skills & jd_skills          # JD-required & present
-    missing = jd_skills - resume_skills          # JD-required but absent
-    extra = resume_skills - jd_skills             # Extra candidate strengths
+    matched = resume_skills & jd_skills
+    missing = jd_skills - resume_skills
+    extra = resume_skills - jd_skills
 
     return f"""
 📊 Match Score: {final_score}%
@@ -103,7 +200,6 @@ def generate_ai_feedback(final_score, resume_skills, jd_skills):
 - Use JD terminology in resume descriptions
 """
 
-
 # ---------------- STREAMLIT UI ----------------
 st.set_page_config(page_title="AI Resume Matcher", layout="centered")
 st.title("🤖 AI-Powered Resume Screening System")
@@ -115,21 +211,47 @@ st.write(
 
 resume_file = st.file_uploader("📄 Upload Resume (PDF)", type=["pdf"])
 job_description = st.text_area("📝 Paste Job Description", height=200)
+manual_resume_text = st.text_area(
+    "✍️ Or paste resume text manually (optional)",
+    height=200
+)
+
 
 if st.button("🔍 Analyze Resume"):
-    if resume_file and job_description.strip():
+    if (resume_file or manual_resume_text.strip()) and job_description.strip():
         with st.spinner("Analyzing resume..."):
-            resume_text = extract_text_from_pdf(resume_file)
+
+            # 1️⃣ Decide where resume text comes from
+            if manual_resume_text.strip():
+                resume_text = manual_resume_text
+            else:
+                resume_text = extract_text_from_pdf(resume_file)
+
+            # 2️⃣ Job description text
             jd_text = clean_text(job_description)
+
+            # 3️⃣ Safety check
             if len(resume_text.strip()) < 100:
-                st.error("❌ Resume text could not be read properly. Please upload a text-based PDF.")
+                st.warning(
+                    "⚠️ Unable to read resume text properly. "
+                    "Please upload a text-based PDF or paste the resume text manually."
+                )
                 st.stop()
 
+
+            if len(resume_text.strip()) < 50:
+                st.warning("⚠️ Unable to read text from this resume PDF. "
+                "This usually happens if the file is scanned, image-based, or low quality.\n\n"
+                "👉 Please upload a text-based PDF (exported from Word/Google Docs), "
+                "or copy–paste the resume text manually."
+                )
+
+
+                st.stop()
 
             resume_skills = extract_canonical_skills(resume_text)
             jd_skills = extract_canonical_skills(jd_text)
 
-            # Fallback for very short job descriptions
             if not jd_skills:
                 jd_skills = resume_skills.copy()
 
@@ -147,7 +269,6 @@ if st.button("🔍 Analyze Resume"):
         st.success(f"✅ Match Score: **{final_score}%**")
         st.write(f"🔍 Semantic Score: {semantic_score}%")
         st.write(f"🧩 Keyword Match Score: {keyword_score}%")
-        
 
         st.subheader("📊 AI Analysis")
         st.write(feedback)
