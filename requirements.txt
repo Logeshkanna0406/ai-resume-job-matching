@@ -1,5 +1,6 @@
 streamlit
 pypdf
+pdfplumber
 sentence-transformers
 scikit-learn
 torch
